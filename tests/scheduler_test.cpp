@@ -1,46 +1,47 @@
-#include "task.h"
-#include <vector>
+#include "scheduler.h"
 
 using namespace coroutine;
 
-class Scheduler {
-public:
-    void schedule(std::shared_ptr<Task> task) {
-        m_tasks.push_back(task);
-    }
-    void run() {
-        std::cout << " number of tasks: " << m_tasks.size() << std::endl;
-        
-        std::shared_ptr<Task> task;
-        auto it = m_tasks.begin();
-        while (it != m_tasks.end()) {
-            task = *it;
-            task->resume();
-            it++;
-        }
-        m_tasks.clear();
-    }
-
-private:
-    std::vector<std::shared_ptr<Task>> m_tasks;
-};
-
-void test_task(int i) {
-    std::cout << " task id: " << i << " is running "<< std::endl;
+static unsigned int test_number;
+std::mutex mutex_cout;
+void task()
+{
+	{
+		std::lock_guard<std::mutex> lock(mutex_cout);
+		std::cout << "task " << test_number ++ << " is under processing in thread: " << Thread::GetThreadId() << std::endl;		
+	}
+	sleep(1);
 }
 
-int main() {
-    // 初始化主线程
-    Task::GetThis();
+int main(int argc, char const *argv[])
+{
+	{
+		// 可以尝试把false 变为true 此时调度器所在线程也将加入工作线程
+		std::shared_ptr<Scheduler> scheduler = std::make_shared<Scheduler>(3, true, "scheduler_1");
+		
+		scheduler->start();
 
-    Scheduler sc;
+		sleep(2);
 
-    for (auto i = 0; i < 20; i++) {
-        std::shared_ptr<Task> task = std::make_shared<Task>(std::bind(test_task, i), 0, false);
-        sc.schedule(task);
-    }
+		std::cout << "\nbegin post\n\n"; 
+		for(int i=0;i<5;i++)
+		{
+			std::shared_ptr<Coroutine> fiber = std::make_shared<Coroutine>(task);
+			scheduler->scheduleLock(fiber);
+		}
 
-    sc.run();
+		sleep(6);
 
-    return 0;
+		std::cout << "\npost again\n\n"; 
+		for(int i=0;i<15;i++)
+		{
+			std::shared_ptr<Coroutine> fiber = std::make_shared<Coroutine>(task);
+			scheduler->scheduleLock(fiber);
+		}		
+
+		sleep(3);
+		// scheduler如果有设置将加入工作处理
+		scheduler->stop();
+	}
+	return 0;
 }

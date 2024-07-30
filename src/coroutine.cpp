@@ -109,13 +109,14 @@ void Coroutine::resume() {
     
     m_state = RUNNING;
 
+    // 为 true 表示该协程参与调度器调度，应该和调度协程进行上下文切换
     if (m_run_in_scheduler) {
         SetThis(this);
         if (swapcontext(&(t_scheduler_coroutine->m_ctx), &m_ctx)) {
             std::cerr << "resume() to t_scheduler_coroutine failed" << std::endl;
 			pthread_exit(NULL); 
         }
-    } else {
+    } else { // 不参与调度器调度，直接和主线程切换
         SetThis(this);
         if (swapcontext(&(t_main_coroutine->m_ctx), &m_ctx)) {
             std::cerr << "resume() to t_thread_coroutine failed" << std::endl;

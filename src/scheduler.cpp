@@ -76,25 +76,27 @@ void Scheduler::run() {
 
     while (true) {
         task.reset();
-        bool tickle_me = false;
-
+        bool tickle_me = false; // 是否要 tickle 其他线程
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             auto it = m_tasks.begin();
             // 遍历任务队列
             while (it != m_tasks.end()) {
                 if (it->thread != -1 && it->thread != thread_id) {
+                    // 指定了调度线程，但是不在当前线程上调度，标记下需要通知其他线程进行调度，然后跳过
                     it++;
                     tickle_me = true;
                     continue;
                 }
-                // 取出任务
+                // 一个未指定线程，或是指定了当前线程的任务
                 assert(it->coroutine || it->cb);
+                // 准备开始调度，将其从任务队列中剔除，活动线程数加1
                 task = *it;
                 m_tasks.erase(it);
                 m_activeThreadCount++;
                 break;
             }
+            // 任务队列还有剩余，tickle 以下其他线程
             tickle_me = tickle_me || (it != m_tasks.end());
         }
 
@@ -105,8 +107,8 @@ void Scheduler::run() {
         if (task.coroutine) {
 			{					
 				std::lock_guard<std::mutex> lock(task.coroutine->m_mtx);
-				if(task.coroutine->getState()!=Coroutine::TERM)
-				{
+				// resume 协程，完成后活跃线程数减1
+                if(task.coroutine->getState()!=Coroutine::TERM) {
 					task.coroutine->resume();	
 				}
 			}
@@ -122,9 +124,9 @@ void Scheduler::run() {
 			m_activeThreadCount--;
 			task.reset();
 
-		} else {		
-            if (idle_task->getState() == Coroutine::TERM)
-            {
+		} else {
+            // 任务队列空了，调度 idle 协程
+            if (idle_task->getState() == Coroutine::TERM) {
             	if(debug) std::cout << "Schedule::run() ends in thread: " << thread_id << std::endl;
                 break;
             }

@@ -162,7 +162,7 @@ void Scheduler::stop() {
 
 	if (m_schedulerTask) {
 		m_schedulerTask->resume();
-		if(debug) std::cout << "m_schedulerFiber ends in thread:" << Thread::GetThreadId() << std::endl;
+		if(debug) std::cout << "m_schedulerCoroutine ends in thread:" << Thread::GetThreadId() << std::endl;
 	}
 
 	std::vector<std::shared_ptr<Thread>> thrs;
